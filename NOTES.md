@@ -47,10 +47,66 @@ Topics covered, in order. Search this when something feels familiar.
 
 ## Arrays
 - An array is a contiguous block of bytes. No length stored, no bounds checking. `xs[i]` is `*(xs + i)`.
-- **Array decays to pointer** in most expressions. NOT in `sizeof(xs)`, `&xs`, or string-literal initializers.
-- Inside a function, `void f(int xs[5])`, `void f(int xs[])`, `void f(int *xs)` are identical. Length info is lost — pass it separately as `size_t n`.
+- An array name is NOT a pointer. It's the storage itself. In *most* expression contexts it **decays** to a pointer to its first element. Decay is a context rule, not a function-call rule.
+- Three exceptions where decay does NOT happen: operand of `sizeof`, operand of `&`, string literal as initializer.
+- `sizeof(xs)` inside the defining scope = total bytes (`N * sizeof(element)`). Inside a function that received the decayed array = `sizeof(pointer)` = 8. Easy way to feel decay.
+- `&xs` has type `T (*)[N]` — pointer to whole array. Same numerical address as `xs`, different type → different pointer-arithmetic step (`(&xs)+1` jumps `sizeof(xs)` bytes).
+- Inside a function, `void f(int xs[5])`, `void f(int xs[])`, `void f(int *xs)` are identical. Length info is lost — pass it separately as `size_t n`. The `5` is documentation only, completely ignored by the compiler.
 - Idiom: `for (size_t i = 0; i < n; i++) { ... }`. `size_t` is unsigned, defined in `<stddef.h>`, returned by `sizeof`.
+- `E1[E2]` ≡ `*((E1) + (E2))`. Therefore `xs[i]` ≡ `i[xs]` (commutative). And `&xs[i]` ≡ `xs + i`.
+- `xs[i]` is an **lvalue** — a named location. Reading it gives the value; assigning to it writes to the original storage. That's why `xs[i] = 40` works without explicit pointer syntax.
 - Fixed-size pool with `alive` flag is the standard pattern for game entities; avoids per-frame `malloc`/`free`.
+- **OOB writes**: no language-level bounds check. Write lands on whatever happens to be at that address — adjacent locals, padding, return address (stack smashing), heap bookkeeping, or unmapped page → SIGSEGV. UB means the compiler may also optimize away the surrounding code. Catch in dev with `-fsanitize=address`.
+
+## Pass-by-value invariant
+- C *always* passes parameters by value. Always. There is no pass-by-reference.
+- "Arrays aren't copied" is true but misleading: it's because the array decays to a pointer *at the call site*, and the pointer (8 bytes) is what's copied. The 40 bytes of contents are shared, not copied.
+- To pass an array by value, wrap it in a struct: `struct Wrapper { int xs[5]; };` — structs do pass by value.
+- Mutation through `T *` works because the address is copied, but the address still refers to the original storage. Same mechanism whether `T *` means "pointer to one" or "pointer to first of many" — the language doesn't distinguish; intent is yours.
+
+## #define and the preprocessor
+- Preprocessor runs *before* the compiler. Pure textual substitution. By compile time, every `#define` has been expanded away — there is no `N` symbol in the binary, just the literal it was replaced with.
+- `#define` is a preprocessor line, not a C statement. Ends at the newline, **no semicolon**. `#define N 5;` makes the macro body `5;`, which then breaks every use site (`positions[5;]` is a syntax error).
+- Function-like macros: `#define SQR(x) ((x) * (x))`. Parenthesize aggressively — no scope, no type-check, just text paste. `DOUBLE(3 + 1)` without parens around `x` expands to `3 + 1 * 2 = 5`, not 8.
+- Choices for compile-time integer constants:
+  - `#define N 5` — preprocessor, no type, works anywhere a constant expression is needed (array sizes, `case` labels).
+  - `enum { N = 5 };` — typed `int`, scoped, debugger-visible, also a constant expression. Often the cleanest.
+  - `const int N = 5;` — in **C** this is NOT a constant expression! `int xs[N]` becomes a VLA. (Different from C++.)
+- Header guards `#ifndef FOO_H / #define FOO_H` use this same machinery — `#define FOO_H` with no body, just to mark a name as "defined."
+
+## VLAs
+- Variable-Length Array: array on the stack whose size is a runtime value, not a constant expression. Introduced in C99, made *optional* in C11. MSVC doesn't support them. Linux kernel banned them in 2018.
+- `int N = 5; int xs[N];` — VLA. The compiler emits `sub %rsp, N*sizeof(int)` at runtime to allocate.
+- Why avoided: (1) stack overflow if `N` is large or attacker-controlled — no graceful failure, just SIGSEGV; (2) negative/zero size = UB; (3) `sizeof(xs)` becomes a runtime computation, not a constant; (4) optimizer-unfriendly; (5) portability.
+- For fixed game pools, always use a compile-time constant via `#define` or `enum`. Heap-allocate (`malloc`) for genuinely runtime-sized buffers.
+
+## Variadic functions and printf
+- `printf` is variadic — the compiler cannot check that arg types match the format string. It just passes args according to the platform ABI.
+- Floats passed through `...` are promoted to `double` and travel in floating-point registers. Ints travel in integer registers. **Different physical locations.**
+- `printf("%d", a_float)` reads from the integer register expecting an `int` — gets garbage. Same UB regardless of how clean the numeric value is. Compile with `-Wall -Wextra` and clang catches this.
+- `%p` expects `void *` specifically. Pass other pointer types only via explicit cast: `(void *)positions`.
+- `%f` for `float`/`double`. `%zu` for `size_t`. `%d` for `int`. `%u` for `unsigned`.
+
+## void * and type erasure
+- `void *` = "pointer to anything." Holds an address, no type info about the pointee.
+- Cannot dereference (`*p` makes no sense — as what type?) and cannot do pointer arithmetic (no step size).
+- Any pointer can be assigned to `void *` and back without explicit cast (in C; C++ requires a cast).
+- Used by `malloc` (returns `void *`), `memcpy`/`memset`, and `%p`. The C version of "generic reference."
+
+## Randomness
+- `rand()` + `srand()` is the standard-C answer but bad: implementation-defined quality, `RAND_MAX` may be as low as 32767, modulo bias on `rand() % N`, one-second seed resolution, not thread-safe.
+- On macOS/BSD: `arc4random()` returns a `uint32_t`, kernel-seeded, no `srand` needed. `arc4random_uniform(N)` gives a bias-free integer in `[0, N)`.
+- Build a `float` in `[0, 1)`: `(float)arc4random() / (float)UINT32_MAX`. Cast *before* division — both operands int would give integer division (always 0).
+- Scale to `[lo, hi)`: `lo + unit * (hi - lo)`.
+- Float literal `f` suffix matters: `1000.0` is `double`, `1000.0f` is `float`. Mixing triggers `-Wdouble-promotion`.
+
+## Process isolation and memory safety
+- Modern OS gives each process its own **virtual address space**, mapped to physical RAM by the MMU via per-process page tables.
+- Same numerical address means *different physical memory* in different processes. You cannot reach another process's RAM by accident (or by raw OOB write).
+- OOB writes can land on: own stack (adjacent locals, return address → stack smashing), own heap (allocator corruption), own globals, or unmapped pages (SIGSEGV). Code pages mapped read-only, so writes there trap immediately.
+- Indirect blast radius beyond memory: files/network/IPC your process has permission for. If running as root, the system. Security exploits chain an OOB write → control-flow hijack inside the process.
+- In-process defenses: ASLR, stack canaries (`-fstack-protector`), NX/DEP, CFI. Dev-time detection: `-fsanitize=address,undefined`.
+- The mental model: "the OS contains your bugs to your process, but inside your process you are the runtime."
 
 ## stdbool.h
 - C had no `bool` until C99. Codebases rolled their own (`typedef int bool;`).

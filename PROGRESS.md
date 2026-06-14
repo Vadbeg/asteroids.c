@@ -16,10 +16,13 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 - [x] `vec2_add` — pass-by-value, returns new struct.
 - [x] `vec2_add_in_place` — pass-by-pointer, mutates caller.
 - [x] `sizeof(Vec2) = 8`, `sizeof(Ship) = 24` — observed padding firsthand.
+- [x] **Arrays exercise**: `positions[N]` + `velocities[N]`, `update(positions, velocities, n, dt)`, tick loop, watched values drift linearly. Caught the `current_time` vs `dt` bug (quadratic drift) and fixed.
+- [x] Random floats: `arc4random()` + cast-and-divide pattern, scaled to `[lo, hi)` via `random_float`.
+- [x] `#define` vs `enum` vs `const int` for compile-time constants. Felt the no-semicolon rule.
+- [x] Array decay rule generalized: about *context*, not just function calls. Three no-decay exceptions internalized.
 
 ## In progress
-- [ ] **Arrays exercise**: `positions[N]` + `velocities[N]`, `update(positions, velocities, n, dt)`, `print_positions`, loop a few "ticks" and watch values drift.
-- [ ] Touch the out-of-bounds case briefly to feel UB, then remove.
+- [ ] Touch the out-of-bounds case briefly to feel UB — write `arr[7]` on a 5-element array, compile with `-fsanitize=address` to see the trap fire, then remove.
 
 ## Next up (in order)
 1. Refactor the array loop to use a proper `Asteroid` struct array with an `alive` flag — object-pool pattern.
