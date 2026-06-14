@@ -20,21 +20,26 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 - [x] Random floats: `arc4random()` + cast-and-divide pattern, scaled to `[lo, hi)` via `random_float`.
 - [x] `#define` vs `enum` vs `const int` for compile-time constants. Felt the no-semicolon rule.
 - [x] Array decay rule generalized: about *context*, not just function calls. Three no-decay exceptions internalized.
+- [X] Touch the out-of-bounds case briefly to feel UB — write `arr[7]` on a 5-element array, compile with `-fsanitize=address` to see the trap fire, then remove.
 
 ## In progress
-- [ ] Touch the out-of-bounds case briefly to feel UB — write `arr[7]` on a 5-element array, compile with `-fsanitize=address` to see the trap fire, then remove.
+- [ ] **Drawing in the console with ncurses** — chose ncurses over raw ANSI for simpler ergonomics. Three milestones:
+  - [ ] **Milestone A — Static draw**: `initscr`, `cbreak`, `noecho`, `curs_set(0)`. Put a single `@` at fixed `(x, y)` with `mvaddch`. `refresh()`. Wait for any keypress (`getch`). `endwin()` on exit. Learn what happens if you forget `endwin` (terminal stays broken until `reset`).
+  - [ ] **Milestone B — Game loop with movement**: non-blocking input (`nodelay(stdscr, TRUE)`, `keypad(stdscr, TRUE)`). Loop: `clear → read input → update `(x,y)` → draw → refresh → sleep ~16ms`. Arrow keys (or wasd) move the dot. `q` quits. This is the canonical game loop shape.
+  - [ ] **Milestone C — Visualize the existing array**: replace the single dot with the `Vec2 positions[N]` array from the arrays exercise. Call existing `update(positions, velocities, N, dt)` each frame. Draw each as `*`. Watch the simulation actually drift on screen.
 
 ## Next up (in order)
-1. Refactor the array loop to use a proper `Asteroid` struct array with an `alive` flag — object-pool pattern.
-2. Split into multiple files: `vec2.{c,h}`, `ship.{c,h}`, `main.c`. Learn the build commands. Header guards.
-3. Write a tiny Makefile.
-4. Hello ncurses: put a `@` on screen, move with arrow keys, quit on `q`. Non-blocking input + frame loop + cleanup.
-5. Game loop with `clock_gettime` and `delta_time`.
-6. Ship physics: pos += vel*dt, angle, thrust, wrap-around at screen edges.
-7. Asteroids: spawn, move, wrap, split when shot.
-8. Bullets: pool, lifetime, fire on key.
-9. Collision detection (circle-circle, distance squared).
-10. Score, lives, game-over.
+1. Real `dt` via `clock_gettime(CLOCK_MONOTONIC, ...)` — replace the hardcoded `0.1f` with measured frame time. Step 5 of original plan; falls out naturally once the loop exists.
+2. Wraparound: when a position goes off-screen, modulo it back. One line of math; visible immediately.
+3. Signal handler for clean teardown on `Ctrl-C` (call `endwin` in handler) — avoids "hosed terminal" after killing mid-loop.
+4. Refactor the array loop to use a proper `Asteroid` struct array with an `alive` flag — object-pool pattern. Worth doing once spawning/destruction enters the picture.
+5. Split into multiple files: `vec2.{c,h}`, `ship.{c,h}`, `main.c`. Header guards. Defer until `main.c` is uncomfortable to navigate (~300 lines).
+6. Write a tiny Makefile.
+7. Ship physics: angle, thrust, vel decay (or no — Asteroids classically has no friction), wrap-around.
+8. Asteroids: spawn, move, wrap, split when shot.
+9. Bullets: pool, lifetime, fire on key.
+10. Collision detection (circle-circle, distance squared).
+11. Score, lives, game-over.
 
 ## Style decisions made
 - Canonical struct form: `typedef struct Name { ... } Name;`.
