@@ -22,7 +22,6 @@ Vec2 vec2_add(Vec2 a, Vec2 b){
     return res;
 }
 
-
 void vec2_add_in_palce(Vec2 *a, Vec2 b){
     (*a).x = (*a).x + b.x;
     (*a).y = (*a).y + b.y;
@@ -45,6 +44,10 @@ int main(void){
 
     printf("sizeof(Vec2) = %zu\n", sizeof(Vec2));
     printf("sizeof(Ship) = %zu\n", sizeof(Ship));
+
+    int xs[5] = {0};
+
+    printf("%d\n", xs[1]);
 
     return 0;
 }
