@@ -20,22 +20,23 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 - [x] Random floats: `arc4random()` + cast-and-divide pattern, scaled to `[lo, hi)` via `random_float`.
 - [x] `#define` vs `enum` vs `const int` for compile-time constants. Felt the no-semicolon rule.
 - [x] Array decay rule generalized: about *context*, not just function calls. Three no-decay exceptions internalized.
-- [X] Touch the out-of-bounds case briefly to feel UB — write `arr[7]` on a 5-element array, compile with `-fsanitize=address` to see the trap fire, then remove.
+- [x] Touch the out-of-bounds case briefly to feel UB — write `arr[7]` on a 5-element array, compile with `-fsanitize=address` to see the trap fire, then remove.
+- [x] **Try ncurses** — got a feel for the library: `initscr`/`endwin`, the buffer model (`clear` → draw → `refresh`), `mvprintw`, `usleep`-driven animation loop, linking with `-lncurses`, Makefile target. Enough to understand its limits firsthand: character-cell resolution, no rotation, snap-to-grid movement. Decided not to push further into ncurses (Milestones B/C dropped).
+
+## Pivot
+Console rendering can't get close enough to original Asteroids (no smooth rotation, coarse grid, no real graphics). Switching to **raylib** for rendering: still C, single library, simple API, gives real 2D pixels, rotation, color, audio. The C-language learning goals on the "Next up" list are unchanged — only the rendering layer swaps. ncurses experiment stays in the repo as a reference for the linking/Makefile/game-loop shape.
 
 ## In progress
-- [ ] **Drawing in the console with ncurses** — chose ncurses over raw ANSI for simpler ergonomics. Three milestones:
-  - [ ] **Milestone A — Static draw**: `initscr`, `cbreak`, `noecho`, `curs_set(0)`. Put a single `@` at fixed `(x, y)` with `mvaddch`. `refresh()`. Wait for any keypress (`getch`). `endwin()` on exit. Learn what happens if you forget `endwin` (terminal stays broken until `reset`).
-  - [ ] **Milestone B — Game loop with movement**: non-blocking input (`nodelay(stdscr, TRUE)`, `keypad(stdscr, TRUE)`). Loop: `clear → read input → update `(x,y)` → draw → refresh → sleep ~16ms`. Arrow keys (or wasd) move the dot. `q` quits. This is the canonical game loop shape.
-  - [ ] **Milestone C — Visualize the existing array**: replace the single dot with the `Vec2 positions[N]` array from the arrays exercise. Call existing `update(positions, velocities, N, dt)` each frame. Draw each as `*`. Watch the simulation actually drift on screen.
+- [ ] **Install raylib and run the example** — `brew install raylib`, write the canonical "open a window, draw a circle, close on ESC" program from the raylib examples. Confirm linking with `-lraylib` works (plus any macOS framework flags raylib needs). Add a `raylib` target to the Makefile mirroring the `ncurses` one.
 
 ## Next up (in order)
-1. Real `dt` via `clock_gettime(CLOCK_MONOTONIC, ...)` — replace the hardcoded `0.1f` with measured frame time. Step 5 of original plan; falls out naturally once the loop exists.
-2. Wraparound: when a position goes off-screen, modulo it back. One line of math; visible immediately.
-3. Signal handler for clean teardown on `Ctrl-C` (call `endwin` in handler) — avoids "hosed terminal" after killing mid-loop.
-4. Refactor the array loop to use a proper `Asteroid` struct array with an `alive` flag — object-pool pattern. Worth doing once spawning/destruction enters the picture.
-5. Split into multiple files: `vec2.{c,h}`, `ship.{c,h}`, `main.c`. Header guards. Defer until `main.c` is uncomfortable to navigate (~300 lines).
-6. Write a tiny Makefile.
-7. Ship physics: angle, thrust, vel decay (or no — Asteroids classically has no friction), wrap-around.
+1. Replace the example with our own loop: open window, draw a single `@`-equivalent (a small filled circle) at `(x, y)`, move it with arrow keys, `ESC`/`q` to quit. The raylib version of Milestone B.
+2. Real `dt` — raylib gives `GetFrameTime()` for free; use it instead of a hardcoded step. Compare to `clock_gettime` mentally so the underlying idea is clear.
+3. Port the `Vec2 positions[N]` + `velocities[N]` array sim onto the raylib window. Draw each as a small circle. Watch the drift.
+4. Wraparound: positions wrap at window edges.
+5. Refactor into an `Asteroid` struct array with an `alive` flag — object-pool pattern.
+6. Split into multiple files: `vec2.{c,h}`, `ship.{c,h}`, `main.c`. Header guards. Defer until `main.c` is uncomfortable to navigate (~300 lines).
+7. Ship: triangle drawn with rotation (angle as float, `DrawTriangle` or `DrawPoly` with rotation), thrust, vel decay (or none — classic Asteroids), wrap-around.
 8. Asteroids: spawn, move, wrap, split when shot.
 9. Bullets: pool, lifetime, fire on key.
 10. Collision detection (circle-circle, distance squared).
