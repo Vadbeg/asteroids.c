@@ -44,6 +44,25 @@ Topics covered, in order. Search this when something feels familiar.
 - Small struct → pass by value is fine (`Vec2`).
 - Large struct → pass `T *` to avoid copying.
 - `(*p).x` ≡ `p->x`. Always use `->` on pointers.
+- **Whole-struct vs decomposed params is a design choice.** Passing `Asteroid *a` is cohesive, convenient, and doesn't churn when the struct grows — but couples the function to that type. Passing the minimal fields (`Vec2 *pos, Vec2 *vel`) keeps the function a *reusable primitive* (same `update`/`wrap` math works for bullets/ship) and narrows the contract (a fn taking `Vec2 *velocity` visibly cannot touch position). Pattern: keep low-level primitives on minimal types, add a thin per-entity wrapper (`update_asteroid(Asteroid*, ...)`) that calls them. Best of both.
+
+## Copy vs. pointer to an array element
+- `Asteroid a = arr[i];` **copies** the struct (structs assign by value). Mutating `a` then throws the change away — the array is untouched. Classic "updating a throwaway copy" bug; same family as returning a local.
+- To mutate the real element: `Asteroid *a = &arr[i];` then `a->field`. Or address a field directly: `&arr[i].position` (`.` binds tighter than `&`, so parens optional).
+
+## Compound literals (C99)
+- Build an anonymous struct value inline, in an expression: `(Vec2){ ... }` — type name in parens + brace initializer. NOT `Vec2(...)` — a type is never callable in C (no constructors). That's a C++/Python/Rust habit.
+- Works with designated init too: `(Vec2){.x = 1.0f, .y = 2.0f}`.
+- Trailing comma: legal **inside** a brace initializer list (`{1, 2,}`), but a syntax error in a **function argument list** (`f(a, b,)`).
+
+## float ↔ int conversions (silent traps)
+- `float → int` assignment **truncates toward zero**, silently. Storing `position->x + velocity->x*dt` (e.g. `200.016`) into an `int` drops the fraction → with sub-pixel-per-frame motion the asteroid never moves at all. Keep positions `float` so tiny increments accumulate.
+- In comparisons like `float >= int`, the `int` is promoted to `float` (usual arithmetic conversions) — works, but a quiet type mismatch. `-Wconversion` flags these; `-Wall -Wextra` does NOT.
+
+## Positional arguments + implicit conversion (reorder bug)
+- C matches arguments to parameters **purely by position, never by name**. Insert a new param in the *middle* of a signature and every call site silently shifts.
+- Because `int`/`float` are implicitly convertible, a reordered call (passing `dt` where `int radius` is expected and `high=900` where `float dt` is expected) **compiles clean** and just behaves insanely (asteroids moved `velocity*900`/frame → flew off instantly). `-Wall -Wextra` won't catch it.
+- Defenses: append new params at the END; bundle related data into one struct pointer; double-check call site vs definition order.
 
 ## Arrays
 - An array is a contiguous block of bytes. No length stored, no bounds checking. `xs[i]` is `*(xs + i)`.
@@ -160,6 +179,27 @@ Topics covered, in order. Search this when something feels familiar.
 - "Indent inside `BeginX`/`EndX`" is a visual convention to fake block scope for begin/end API pairs (`BeginMode2D`, `BeginShaderMode`, etc.). Not C syntax, just style.
 - `SetTargetFPS(60)` + `GetFrameTime()` for free framerate-independent timing. Equivalent to `clock_gettime` work we'd otherwise do manually.
 - Docs: header comments + raylib.com cheatsheet + examples folder. No man pages.
+
+## raylib coordinates (screen space)
+- Origin `(0,0)` is **top-left**. x grows right (same as math); **y grows DOWN** (opposite of math/plots). `(width, height)` is bottom-right.
+- Consequence: **positive `velocity.y` moves DOWN.** Matters for ship thrust later, not for drifting asteroids.
+- Units are floats in the API even though pixels are discrete; sub-pixel positions round at draw time.
+- `DrawCircle(x, y, r, color)` treats `(x,y)` as the **center**, not a corner — so center can be in-bounds while body pokes past an edge.
+- `GetScreenWidth()` / `GetScreenHeight()` give bounds at runtime — use instead of a hardcoded magic size so spawn/wrap stay correct.
+- **Coordinate-wrapper temptation** (keep world as y-up, flip only at draw): legitimate pattern but premature here. Cost isn't the one-subtraction math — it's that *every* raylib call touching coords (input, mouse, text, textures) becomes a conversion site, plus carrying two systems in your head. Adopt the library's native convention until it demonstrably hurts; then a tiny `world_to_screen()` used only at draw calls beats a parallel universe. General C lesson: abstractions have carrying costs nobody amortizes for you — resist until the concrete version hurts.
+
+## Wraparound (toroidal screen)
+- Original Asteroids wraps everything (ship, rocks, bullets) — top↔bottom, left↔right. Not wall-bounce; the game has no walls.
+- **Body-vs-center matters for smoothness.** Exit only when the whole body is gone (`center - radius >= high`), re-enter flush against the opposite edge (`center = 0 - radius`, leading edge just touching). Snapping the center instead causes a visible pop.
+- Use `else if` for the two opposite edges — independent `if`s fire on the same value (wrap then immediately un-wrap).
+- Wrap x against **width**, y against **height** — only equal while the window is square; don't conflate them.
+
+## Collision detection (the core mental shift)
+- **Never iterate pixels/outline.** Swap the render shape for a cheap math **proxy** — a bounding circle (center + radius) — and test with a formula.
+- Two circles overlap iff distance between centers `< r1 + r2`. One comparison per pair, no loop over points.
+- **Squared-distance trick:** compare `dx*dx + dy*dy < (r1+r2)*(r1+r2)` to skip `sqrt` (expensive). Valid because squaring preserves order for non-negatives.
+- Tune the collision radius independently of the drawn shape (slightly smaller = fair near-misses).
+- **Original Asteroids collision matrix:** asteroids do NOT collide with each other (would need real rigid-body physics + N² checks; rocks are just hazards drifting in straight lines). Only cross-type pairs: asteroid×{ship, bullet, saucer}. So your loops are always across categories, never self-paired — cheaper and simpler.
 
 ## Game loop shape (portable to web)
 - Body of the loop should be a callable function: one frame = one call.

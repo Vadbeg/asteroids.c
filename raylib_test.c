@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-static const float MIN_SPEED_BOUND = -60.0f;
-static const float MAX_SPEED_BOUND = 60.0f;
+static const float MIN_SPEED_BOUND = -120.0f;
+static const float MAX_SPEED_BOUND = 120.0f;
 
 typedef struct Vec2 {
     float x; 
@@ -77,7 +77,7 @@ void draw_asteroids(Asteroid asteroids[], int number, int radius){
 int main(void){
     int low = 0;
     int hight = 900;
-    int number_of_asteroids = 1;
+    int number_of_asteroids = 5;
     int hitbox_radius = 30;
 
     InitWindow(hight, hight, "raylib game flow testing");
