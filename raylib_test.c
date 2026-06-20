@@ -36,40 +36,40 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
 }
 
 
-void wrap_around(Vec2 *position, int high){
-    if (position->y >= high){
-        position->y = 0.0f;
+void wrap_around(Vec2 *position, int radius, int high){
+    if (position->y - (float)radius >= high){
+        position->y = 0.0f - (float)radius;
     }
-    else if (position->y <= 0.0f){
-        position->y = high;
+    else if (position->y + (float)radius <= 0.0f){
+        position->y = high + (float)radius;
     }
 
-    if (position->x >= high){
-        position->x = 0.0f;
+    if (position->x - (float)radius >= high){
+        position->x = 0.0f - (float)radius;
     }
-    else if (position->x <= 0.0f){
-        position->x = high;
+    else if (position->x + (float)radius <= 0.0f){
+        position->x = high + (float)radius;
     }
 }
 
 
-void update(Vec2 *position, Vec2 *velocity, float dt, int high) {
+void update(Vec2 *position, Vec2 *velocity, float dt, int high, int radius) {
     position->x = position->x + velocity->x * dt;
     position->y = position->y + velocity->y * dt;
 
-    wrap_around(position, high);
+    wrap_around(position, radius, high);
 }
 
 
-void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, float dt, int high){
+void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, int radius, float dt, int high){
     for (int i = 0; i < number; i++){
-        update(&(asteroids[i].position), &(asteroids[i].velocity), dt, high);
+        update(&(asteroids[i].position), &(asteroids[i].velocity), dt, high, radius);
     }
 }
 
-void draw_asteroids(Asteroid asteroids[], int number){
+void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
-        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, 5, GRAY);
+        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, GRAY);
     }
 }
 
@@ -77,7 +77,8 @@ void draw_asteroids(Asteroid asteroids[], int number){
 int main(void){
     int low = 0;
     int hight = 900;
-    int number_of_asteroids = 100;
+    int number_of_asteroids = 1;
+    int hitbox_radius = 30;
 
     InitWindow(hight, hight, "raylib game flow testing");
     SetTargetFPS(60);
@@ -87,12 +88,12 @@ int main(void){
 
     while (!WindowShouldClose()){
         float dt = (float)GetFrameTime();
-        calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, dt, hight);
+        calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, hitbox_radius, dt, hight);
 
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
-            draw_asteroids(asteroids, number_of_asteroids);
+            draw_asteroids(asteroids, number_of_asteroids, hitbox_radius);
 
         EndDrawing();
     }
