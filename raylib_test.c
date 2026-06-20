@@ -36,29 +36,28 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
 }
 
 
+void wrap_around(Vec2 *position, int high){
+    if (position->y >= high){
+        position->y = 0.0f;
+    }
+    else if (position->y <= 0.0f){
+        position->y = high;
+    }
+
+    if (position->x >= high){
+        position->x = 0.0f;
+    }
+    else if (position->x <= 0.0f){
+        position->x = high;
+    }
+}
+
+
 void update(Vec2 *position, Vec2 *velocity, float dt, int high) {
-    // position->x = position->x + velocity->x * dt;
-    // position->y = position->y + velocity->y * dt;
+    position->x = position->x + velocity->x * dt;
+    position->y = position->y + velocity->y * dt;
 
-    float new_x = position->x + velocity->x * dt;
-    float new_y = position->y + velocity->y * dt;
-
-    if (new_y >= high){
-        new_y = 0.0f;
-    }
-    else if (new_y <= 0.0f){
-        new_y = high;
-    }
-
-    if (new_x >= high){
-        new_x = 0.0f;
-    }
-    else if (new_x <= 0.0f){
-        new_x = high;
-    }
-
-    position->x = new_x;
-    position->y = new_y;
+    wrap_around(position, high);
 }
 
 
