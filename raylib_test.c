@@ -36,21 +36,41 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
 }
 
 
-void update(Vec2 *position, Vec2 *velocity, float dt) {
-    position->x = position->x + velocity->x * dt;
-    position->y = position->y + velocity->y * dt;
+void update(Vec2 *position, Vec2 *velocity, float dt, int high) {
+    // position->x = position->x + velocity->x * dt;
+    // position->y = position->y + velocity->y * dt;
+
+    float new_x = position->x + velocity->x * dt;
+    float new_y = position->y + velocity->y * dt;
+
+    if (new_y >= high){
+        new_y = 0.0f;
+    }
+    else if (new_y <= 0.0f){
+        new_y = high;
+    }
+
+    if (new_x >= high){
+        new_x = 0.0f;
+    }
+    else if (new_x <= 0.0f){
+        new_x = high;
+    }
+
+    position->x = new_x;
+    position->y = new_y;
 }
 
 
-void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, float dt){
+void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, float dt, int high){
     for (int i = 0; i < number; i++){
-        update(&(asteroids[i].position), &(asteroids[i].velocity), dt);
+        update(&(asteroids[i].position), &(asteroids[i].velocity), dt, high);
     }
 }
 
 void draw_asteroids(Asteroid asteroids[], int number){
     for (int i = 0; i < number; i++){
-        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, 3, GRAY);
+        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, 5, GRAY);
     }
 }
 
@@ -62,32 +82,20 @@ int main(void){
 
     InitWindow(hight, hight, "raylib game flow testing");
     SetTargetFPS(60);
-    int i = 0;
 
     Asteroid asteroids[number_of_asteroids];
     initialize_asteroids(asteroids, number_of_asteroids, low, hight);
 
     while (!WindowShouldClose()){
-        if (i < 20){
-            i++;
-        }
-        
         float dt = (float)GetFrameTime();
-        printf("Time elapsed: %f\n", dt);
-        calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, dt);
+        calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, dt, hight);
 
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
-            // DrawText("Hey mate!", 190 + i * 10, 200, 20, LIGHTGRAY);
             draw_asteroids(asteroids, number_of_asteroids);
 
         EndDrawing();
-
-        int key_pressed = GetKeyPressed();
-        if (key_pressed == KEY_A) {
-            i = 0;
-        } 
     }
 
     CloseWindow();
