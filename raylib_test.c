@@ -68,24 +68,33 @@ void update(Vec2 *position, Vec2 *velocity, float dt, int high, int radius) {
 }
 
 
-void change_speed(Vec2 *velocity, float alpha, float ceiling){
+Vec2 get_direction(float angle){
+    float radians = angle * DEG2RAD;
+
+    Vec2 direction = {
+        .x = cosf(radians),
+        .y = sinf(radians)
+    };
+    return direction;
+}
+
+
+void change_speed(Vec2 *velocity, float angle, float acceleration, float dt, float ceiling){
     float speed = sqrtf(velocity->x * velocity->x + velocity->y * velocity->y);
-    printf("Speed: %f\n", speed);
+    Vec2 direction = get_direction(angle);
+    printf("Speed: %f, Angle: %f\n", speed, angle);
     
-    if (speed < ceiling || alpha < 0){
-        velocity->x = velocity->x + alpha;
-        velocity->y = velocity->y + alpha;
-    }
-
-    if (velocity->x < 0){
-        velocity->x = 0;
-    }
-
-    if (velocity->y < 0){
-        velocity->y = 0;
+    if (speed < ceiling){
+        velocity->x = velocity->x + direction.x * acceleration * dt;
+        velocity->y = velocity->y + direction.y * acceleration * dt;
     }
 }
 
+
+void apply_friction(Vec2 *velocity, float friction, float dt){
+    velocity->x = velocity->x * friction;
+    velocity->y = velocity->y * friction;
+}
 
 void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, int radius, float dt, int high){
     for (int i = 0; i < number; i++){
@@ -117,8 +126,9 @@ int main(void){
     int ship_radius = 10;
 
     float max_speed = 50.0f;
-    float acceleration = 0.1f;
-    float deceleration = -0.2f;
+    float acceleration = 100.0f;
+    float friction = 0.99f;
+    float angle_change = 50.0f;
 
     Vec2 start_ship_position = {
         .x=450,
@@ -131,6 +141,7 @@ int main(void){
     Ship ship = {
         .position=start_ship_position,
         .velocity=start_ship_velocity,
+        .angle=270
     };
 
     InitWindow(hight, hight, "raylib game flow testing");
@@ -145,9 +156,16 @@ int main(void){
         calculate_next_ship_coordinates(&ship, ship_radius, dt, hight);
 
         if (IsKeyDown(KEY_UP)){
-            change_speed(&ship.velocity, acceleration, max_speed);
-        } else {
-            change_speed(&ship.velocity, deceleration, max_speed);
+            change_speed(&ship.velocity, ship.angle, acceleration, dt, max_speed);
+        } 
+
+        apply_friction(&ship.velocity, friction, dt);
+
+        if (IsKeyDown(KEY_LEFT)){
+            ship.angle -= angle_change * dt;
+        }
+        if (IsKeyDown(KEY_RIGHT)){
+            ship.angle += angle_change * dt;
         }
 
         BeginDrawing();
