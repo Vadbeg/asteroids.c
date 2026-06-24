@@ -1,91 +1,188 @@
+#include <math.h>
+#include <raylib.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 
-#define N 5
+static const float MIN_SPEED_BOUND = -120.0f;
+static const float MAX_SPEED_BOUND = 120.0f;
 
 typedef struct Vec2 {
     float x; 
     float y;
 } Vec2;
 
-typedef struct Ship {
-    Vec2 pos;
-    Vec2 vel;
+typedef struct Asteroid {
+    Vec2 position;
+    Vec2 velocity;
+} Asteroid;
+
+typedef struct Ship{
+    Vec2 position;
+    Vec2 velocity;
     float angle;
-    bool alive;
 } Ship;
 
-Vec2 vec2_add(Vec2 a, Vec2 b){
-    Vec2 res;
-    res.x = a.x + b.x;
-    res.y = a.y + b.y;
-
-    return res;
-}
-
-void vec2_add_in_place(Vec2 *a, Vec2 b){
-    (*a).x = (*a).x + b.x;
-    (*a).y = (*a).y + b.y;
-}
 
 float random_float(float low, float high){
     float unit = (float) arc4random() / (float) UINT32_MAX;
     return low + (high - low) * unit;
 }
 
-Vec2 initialize_vector(int upper_limit){
-    Vec2 vector = {
-        .x = random_float(0, upper_limit),
-        .y = random_float(0, upper_limit),
-    };
-
-    return vector;
+void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
+    for (int i = 0; i < number; i++){
+        asteroids[i].position = (Vec2){
+            random_float((float)low, (float)high),
+            random_float((float)low, (float)high)
+        };
+        asteroids[i].velocity = (Vec2){
+            random_float(MIN_SPEED_BOUND, MAX_SPEED_BOUND),
+            random_float(MIN_SPEED_BOUND, MAX_SPEED_BOUND)
+        };
+    }
 }
 
 
-void update(Vec2 positions[], Vec2 velocities[], int size, float dt) {
-    for (int i = 0; i < size; i++){
-        positions[i].x = positions[i].x + velocities[i].x * dt;
-        positions[i].y = positions[i].y + velocities[i].y * dt;
+void wrap_around(Vec2 *position, int radius, int high){
+    if (position->y - (float)radius >= high){
+        position->y = 0.0f - (float)radius;
     }
+    else if (position->y + (float)radius <= 0.0f){
+        position->y = high + (float)radius;
+    }
+
+    if (position->x - (float)radius >= high){
+        position->x = 0.0f - (float)radius;
+    }
+    else if (position->x + (float)radius <= 0.0f){
+        position->x = high + (float)radius;
+    }
+}
+
+
+void update(Vec2 *position, Vec2 *velocity, float dt, int high, int radius) {
+    position->x = position->x + velocity->x * dt;
+    position->y = position->y + velocity->y * dt;
+
+    wrap_around(position, radius, high);
+}
+
+
+Vec2 get_direction(float angle){
+    float radians = angle * DEG2RAD;
+
+    Vec2 direction = {
+        .x = cosf(radians),
+        .y = sinf(radians)
+    };
+    return direction;
+}
+
+
+void change_speed(Vec2 *velocity, float angle, float acceleration, float dt){
+    float speed = sqrtf(velocity->x * velocity->x + velocity->y * velocity->y);
+    Vec2 direction = get_direction(angle);
+    printf("Speed: %f, Angle: %f\n", speed, angle);
+    
+    velocity->x = velocity->x + direction.x * acceleration * dt;
+    velocity->y = velocity->y + direction.y * acceleration * dt;
+}
+
+
+void apply_friction(Vec2 *velocity, float friction, float dt){
+    velocity->x = velocity->x * friction;
+    velocity->y = velocity->y * friction;
+}
+
+void calculate_next_asteroids_coordinates(Asteroid asteroids[], int number, int radius, float dt, int high){
+    for (int i = 0; i < number; i++){
+        update(&(asteroids[i].position), &(asteroids[i].velocity), dt, high, radius);
+    }
+}
+
+void calculate_next_ship_coordinates(Ship *ship, int radius, float dt, int high){
+    update(&ship->position, &ship->velocity, dt, high, radius);
+}
+
+void draw_asteroids(Asteroid asteroids[], int number, int radius){
+    for (int i = 0; i < number; i++){
+        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, GRAY);
+    }
+}
+
+void draw_ship(Ship ship, int radius){
+    DrawCircle(ship.position.x, ship.position.y, radius, GREEN);
+    
+    Vec2 direction = get_direction(ship.angle);
+    Vec2 nose_position = {
+        .x=ship.position.x + direction.x * radius,
+        .y=ship.position.y + direction.y * radius
+    };
+
+    DrawLine(ship.position.x, ship.position.y, nose_position.x, nose_position.y, BLACK);
 }
 
 
 int main(void){
-    int position_upper_limit = 10;
-    int velocities_upper_limit = 10; 
+    int low = 0;
+    int hight = 900;
+    int number_of_asteroids = 5;
 
-    int steps = 10;
-    float tick = 0.1f;
-    float current_time = 0.0f;
+    int hitbox_radius = 30;
+    int ship_radius = 10;
 
-    Vec2 positions[N];
-    Vec2 velocities[N];
+    float acceleration = 100.0f;
+    float friction = 0.99f;
+    float angle_change = 50.0f;
 
-    for (int i = 0; i < N; i++){
-        positions[i] = initialize_vector(position_upper_limit);
-        velocities[i] = initialize_vector(velocities_upper_limit);
-    }
+    Vec2 start_ship_position = {
+        .x=450,
+        .y=450
+    };
+    Vec2 start_ship_velocity = {
+        .x=0,
+        .y=0
+    };
+    Ship ship = {
+        .position=start_ship_position,
+        .velocity=start_ship_velocity,
+        .angle=270
+    };
 
-    printf("Intial positions and velocities:\n");
-    for (int i = 0; i < N; i++){
-        printf("position[%d] = (%f, %f)\n", i, positions[i].x, positions[i].y);
-        printf("velocity[%d] = (%f, %f)\n", i, velocities[i].x, velocities[i].y);
-    }
+    InitWindow(hight, hight, "raylib game flow testing");
+    SetTargetFPS(60);
 
-    for (int curr_step = 0; curr_step < steps; curr_step++){
-        printf("\nPositions at step %d:\n", curr_step);
+    Asteroid asteroids[number_of_asteroids];
+    initialize_asteroids(asteroids, number_of_asteroids, low, hight);
 
-        update(positions, velocities, N, tick);
+    while (!WindowShouldClose()){
+        float dt = (float)GetFrameTime();
+        calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, hitbox_radius, dt, hight);
+        calculate_next_ship_coordinates(&ship, ship_radius, dt, hight);
 
-        for (int i = 0; i < N; i++){
-            printf("position[%d] = (%f, %f)\n", i, positions[i].x, positions[i].y);
+        if (IsKeyDown(KEY_UP)){
+            change_speed(&ship.velocity, ship.angle, acceleration, dt);
+        } 
+
+        apply_friction(&ship.velocity, friction, dt);
+
+        if (IsKeyDown(KEY_LEFT)){
+            ship.angle -= angle_change * dt;
+        }
+        if (IsKeyDown(KEY_RIGHT)){
+            ship.angle += angle_change * dt;
         }
 
-        current_time += tick;
+        BeginDrawing();
+
+            ClearBackground(RAYWHITE);
+            draw_asteroids(asteroids, number_of_asteroids, hitbox_radius);
+            draw_ship(ship, ship_radius);
+
+        EndDrawing();
     }
+
+    CloseWindow();
 
     return 0;
 }
