@@ -4,8 +4,8 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 
 ## Setup
 - macOS, clang + clangd via VS Code.
-- Single-file project so far: `main.c`.
-- Always compile with: `clang -Wall -Wextra -Wpedantic main.c -o main`
+- Single-file project: `main.c` (the raylib prototype graduated from `raylib_test.c` into `main.c`; old code removed).
+- Build via `make` (Makefile wraps the raylib flags) or directly: `clang -Wall -Wextra -Wpedantic main.c -o main -lraylib -I/opt/homebrew/include -L/opt/homebrew/lib`.
 
 ## Done
 - [x] Hello World — printf, `\n`, exit codes.
@@ -27,6 +27,22 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 - [x] **Wraparound** — toroidal, body-vs-center (exit when whole body off `center - r >= high`, re-enter flush on opposite edge), `else if` per axis pair, accounts for radius. Verified smooth on all four edges with a single asteroid.
 - [x] **Bugs caught & understood** (see NOTES): copy-vs-pointer element (`a = arr[i]` copies), `float→int` truncation freezing sub-pixel motion, positional-argument reorder with silent implicit conversion (asteroids flew off at `velocity*900`).
 - [x] **Design discussions** (no code): collision via bounding-circle proxy + squared distance + cross-type-only matrix; whole-struct vs decomposed params; premature coordinate-wrapper abstraction; raylib screen-space y-down coords.
+- [x] **Ship rotation** — `float angle` (degrees), `LEFT`/`RIGHT` change it by `angle_change * dt` (framerate-independent). `get_direction(angle)` → unit vector via `DEG2RAD` + `cosf`/`sinf`.
+- [x] **Vector thrust** — `KEY_UP` adds `direction × acceleration × dt` to velocity (add, not scale). Killed the old per-axis zero-clamp that forbade up/left motion.
+- [x] **Friction + natural terminal velocity** — exponential drag (`velocity *= friction`) applied every frame. Derived the fixed point `v* = a·dt/(1−d)` and why proportional drag self-caps; confirmed the hard speed `ceiling` is redundant and removed it.
+- [x] **Heading marker** — line from ship center to `center + direction × radius`, drawn with scalar `DrawLine` to dodge the `Vec2` vs raylib `Vector2` type-identity clash.
+
+## Known TODO / loose ends
+- `apply_friction` takes `dt` but **doesn't use it** — drag is still a raw per-frame `× 0.99`, so framerate-dependent. Fix: `friction^dt` (`powf`) or `e^(−k·dt)` (`expf`). Invisible at locked 60fps. See NOTES "Framerate-independent damping".
+- Debug `printf` of speed/angle still in the thrust path — remove once tuning's done.
+- Ship is still a circle + nose line; eventual real **triangle** ship is a "make it pretty" item.
+
+## Next up (roadmap)
+1. **Bullets** — fire from ship nose along heading (`get_direction`), own position/velocity, lifetime/range limit, fixed-size pool with `alive` flag (the entity pattern from NOTES "Arrays").
+2. **Collisions** — bounding-circle proxy + squared-distance test, cross-type only (asteroid×bullet, asteroid×ship). All the design groundwork is in NOTES "Collision detection".
+3. **Asteroid destruction / splitting** — bullet hit removes/splits an asteroid into smaller ones.
+4. **Ship death** — asteroid×ship contact blows up the ship.
+5. Core gameplay done → **make it pretty** (triangle ship, vector asteroids, explosions, score).
 
 ## Pivot
 Console rendering can't get close enough to original Asteroids (no smooth rotation, coarse grid, no real graphics). Switching to **raylib** for rendering: still C, single library, simple API, gives real 2D pixels, rotation, color, audio. The C-language learning goals on the "Next up" list are unchanged — only the rendering layer swaps. ncurses experiment stays in the repo as a reference for the linking/Makefile/game-loop shape.

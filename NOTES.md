@@ -188,6 +188,50 @@ Topics covered, in order. Search this when something feels familiar.
 - `GetScreenWidth()` / `GetScreenHeight()` give bounds at runtime — use instead of a hardcoded magic size so spawn/wrap stay correct.
 - **Coordinate-wrapper temptation** (keep world as y-up, flip only at draw): legitimate pattern but premature here. Cost isn't the one-subtraction math — it's that *every* raylib call touching coords (input, mouse, text, textures) becomes a conversion site, plus carrying two systems in your head. Adopt the library's native convention until it demonstrably hurts; then a tiny `world_to_screen()` used only at draw calls beats a parallel universe. General C lesson: abstractions have carrying costs nobody amortizes for you — resist until the concrete version hurts.
 
+## Thrust as vector addition (not scaling)
+- Velocity is a **vector**; acceleration is also a vector. To speed up you **add** an acceleration vector to velocity — you do NOT multiply velocity by a scalar.
+- Multiplication is the wrong tool for thrust: `0 × anything = 0`, so a ship at rest could never start; and a zero vector has no direction to scale toward. The "add a tiny nudge on the first frame" hack is a symptom of using the wrong operation.
+- The thrust direction does **not** come from current velocity — it comes from the ship's heading (the angle). So thrust works fine from a dead stop: add a heading-direction vector and motion begins.
+- Multiplication (scaling down) is the right tool only for **drag/friction** — shrinking an existing vector, where `0 × k = 0` (stopped stays stopped) is exactly what you want.
+- Full thrust step: `unit_direction × acceleration_magnitude × dt`, added to velocity. Three independent knobs: direction (where), magnitude (how hard), `dt` (framerate independence).
+
+## Angle representation (the unit war)
+- Two facts that never change: `cosf`/`sinf` **always** need radians; raylib's `rotation` params **always** want degrees. No single stored unit satisfies both — you convert *somewhere* regardless.
+- Decide by counting consumers. A **hand-built vector ship** (`DrawTriangle`/`DrawLineV` from vertices you compute via trig) has NO degree consumer at all → radians is native to everything. A `DrawPoly`/rotated-texture ship → that one call wants degrees.
+- We chose to **store degrees** (easier to reason about / eyeball-debug: "90° is a quarter turn"). Cost: convert deg→rad (`* DEG2RAD`, a raylib macro) at every trig call. Accepted with eyes open.
+- `get_direction(angle)` → unit vector `(cosf(rad), sinf(rad))`, magnitude 1 by the Pythagorean identity. Reused everywhere a heading direction is needed (thrust, nose marker, later bullets).
+- Angle MUST be `float`, not `int`: rotation per frame is `angle_change * dt` = fractional (e.g. `50 * 0.016 ≈ 0.8`); an `int` truncates that to 0 and the ship never turns. Same `float→int` truncation trap as positions. Not `double` either — feeds `f`-trig and raylib's float API.
+- Wrap the angle with `fmodf(a, 360.0f)` so it doesn't grow unbounded as you spin. Same modular idea as screen wraparound, on a scalar.
+- **Screen y-down consequence:** `(cosf θ, sinf θ)` sweeps **clockwise** as θ increases (math convention is CCW, but y is flipped). Fine as long as the drawn nose and the thrust both come from the *same* angle through the *same* trig — pick what θ=0 means and stay consistent.
+
+## Friction / drag models + natural terminal velocity
+- Friction is a **separate, always-on** step: it runs every frame regardless of input (unlike thrust, which is gated on the key). Don't tangle it into the thrust function.
+- **Exponential / viscous drag** (`velocity *= factor < 1`): force ∝ velocity. Simplest, can't reverse or overshoot, asymptotes toward 0. This is a *real* physical regime (slow motion through fluid), not a hack.
+- **Constant / Coulomb friction** (subtract fixed step along `−velocity`): force constant. Linear slowdown, stops in finite time — but must **clamp at zero** or it overshoots and the ship creeps backwards.
+- Original Asteroids is near-**frictionless** (spaceship in vacuum): you slow down by rotating and counter-thrusting, not drag. Adding drag is a design choice for feel.
+- **Terminal velocity is a stable fixed point.** Per-frame recurrence (1D, constant thrust): `v_next = d·v + a·dt` — an affine recurrence (same shape as an EMA / discounted return). Fixed point `v* = a·dt / (1 − d)`, finite, no clamp needed.
+- **Why it self-caps:** thrust adds a *constant* `a·dt` (doesn't grow with speed); drag removes `(1−d)·v` (*proportional* to speed). The proportional term inevitably catches the constant one — crossover = terminal velocity.
+- **Why it's stable, not just balanced:** error `e = v − v*` obeys `e_next = d·e` → decays geometrically by `d` each frame from any start. `v*` is an attractor; approach is itself exponential. Converges iff `|d| < 1` (a contraction).
+- **Why exponential specifically gives a free cap:** constant (Coulomb) friction makes the recurrence `v_next = v + a·dt − f` — both terms constant in `v`, no speed-dependent term → if `a·dt > f`, speed grows forever (no terminal velocity). Only a drag term that *scales with the quantity you want to limit* self-regulates. This is why the hard `ceiling` clamp became redundant once exponential drag was in.
+
+## Framerate-independent damping
+- A raw per-frame `velocity *= 0.99` is **framerate-dependent**: it fires 60×/s vs 144×/s, so the ship slows much faster on a fast monitor AND terminal velocity shifts (`v*` depends on the effective `d`). Invisible while `SetTargetFPS` locks `dt` — bites when framerate changes. (Known TODO in `apply_friction`: it takes `dt` but doesn't use it yet.)
+- Fix: express drag as "fraction remaining **per second**" applied over `dt`. Stretch the factor across arbitrary `dt` by raising to the `dt` power: `friction^dt` (`powf`), or equivalently `e^(−k·dt)` (`expf`). These make two half-frames compose into one full frame; a plain multiply does not.
+
+## Capping speed while keeping steering (magnitude clamp)
+- Gating thrust with `if (speed < ceiling)` kills steering at top speed — at the cap, thrust is switched off entirely, so you can't even *redirect*.
+- Right approach: always apply thrust, then **clamp the result's magnitude**. Set a vector to length L while preserving direction: `v × (L / current_length)` (normalize, then scale). At the cap, thrusting sideways rotates velocity toward the new heading without growing it → steering survives.
+- Guard `length == 0` (division by zero) before dividing.
+- In practice, once exponential drag gave a natural terminal velocity below `ceiling`, the explicit clamp was dropped entirely.
+
+## Your Vec2 vs raylib's Vector2 (name equivalence, in practice)
+- raylib's `Vector2` and your `Vec2` have identical layout (two floats) but are **different type identities** (the name-equivalence rule). The `…V` draw calls (`DrawLineV`, `DrawCircleV`) take `Vector2` and will reject your `Vec2`.
+- Sidestep: use the **scalar-argument** draw functions (`DrawLine(x1,y1,x2,y2,...)`, `DrawCircle(x,y,r,...)`) — pass `.x`/`.y` out of your own struct, never touch raylib's type. (Or construct a `Vector2` at the call boundary if you want the `…V` forms.)
+
+## Visualizing heading
+- Reuse `get_direction(angle)` and project a point in front of the ship: `nose = center + direction × length`. Same `unit-vector × scalar + position` pattern as thrust, applied to position for rendering.
+- A **line** from center to nose reads as "pointing" more clearly than a dot. Scale a bit past the radius (`× radius × 1.5`) so the nose pokes out. Stepping stone toward a real triangle ship (3 vertices from the angle).
+
 ## Wraparound (toroidal screen)
 - Original Asteroids wraps everything (ship, rocks, bullets) — top↔bottom, left↔right. Not wall-bounce; the game has no walls.
 - **Body-vs-center matters for smoothness.** Exit only when the whole body is gone (`center - radius >= high`), re-enter flush against the opposite edge (`center = 0 - radius`, leading edge just touching). Snapping the center instead causes a visible pop.
