@@ -105,9 +105,7 @@ Vec2 get_direction(float angle){
 
 
 void change_speed(Vec2 *velocity, float angle, float acceleration, float dt){
-    float speed = sqrtf(velocity->x * velocity->x + velocity->y * velocity->y);
     Vec2 direction = get_direction(angle);
-    // printf("Speed: %f, Angle: %f\n", speed, angle);
     
     velocity->x = velocity->x + direction.x * acceleration * dt;
     velocity->y = velocity->y + direction.y * acceleration * dt;
