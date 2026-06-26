@@ -1,5 +1,6 @@
 #include <math.h>
 #include <raylib.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -15,6 +16,7 @@ typedef struct Vec2 {
 typedef struct Asteroid {
     Vec2 position;
     Vec2 velocity;
+    bool alive;
 } Asteroid;
 
 typedef struct Ship{
@@ -41,6 +43,16 @@ float get_distance(Vec2 position1, Vec2 position2){
     return distance;
 }
 
+bool is_collision(Vec2 position1, Vec2 position2, int radius1, int radius2){
+    float distance_between = get_distance(position1, position2);
+
+    if (distance_between <= (float)radius1 + (float)radius2){
+        return true;
+    }
+    
+    return false;
+}
+
 void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
     for (int i = 0; i < number; i++){
         asteroids[i].position = (Vec2){
@@ -51,6 +63,7 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
             random_float(MIN_SPEED_BOUND, MAX_SPEED_BOUND),
             random_float(MIN_SPEED_BOUND, MAX_SPEED_BOUND)
         };
+        asteroids[i].alive = true;
     }
 }
 
@@ -132,7 +145,9 @@ void calculate_next_bullet_coordinates(Bullet bullets[], int length, int radius,
 
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
-        DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, GRAY);
+        if (asteroids[i].alive){
+            DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, GRAY);
+        }
     }
 }
 
@@ -182,6 +197,39 @@ void fire_bullet(Ship ship, Bullet bullets[], int ship_radius, int bullet_index,
 }
 
 
+void check_asteroids_and_bullets_collisions(
+    Bullet bullets[], 
+    Asteroid asteroids[], 
+    int bullets_length, 
+    int asteroids_length,
+    int bulled_radius,
+    int asteroid_radius
+){
+    for (int bullet_index = 0; bullet_index < bullets_length; bullet_index++){
+        for (int asteroid_index = 0; asteroid_index < asteroids_length; asteroid_index++){
+            if (!asteroids[asteroid_index].alive){
+                continue;
+            }
+            if (!bullets[bullet_index].alive){
+                continue;
+            }
+
+            bool collision = is_collision(
+                bullets[bullet_index].position,
+                asteroids[asteroid_index].position,
+                bulled_radius,
+                asteroid_radius
+            );
+
+            if (collision){
+                bullets[bullet_index].alive = false;
+                asteroids[asteroid_index].alive = false;
+            }
+        }
+    }
+}
+
+
 int main(void){
     int low = 0;
     int hight = 900;
@@ -214,7 +262,7 @@ int main(void){
     };
 
     
-    InitWindow(hight, hight, "raylib game flow testing");
+    InitWindow(hight, hight, "Asteroids.c");
     SetTargetFPS(60);
     
     Asteroid asteroids[number_of_asteroids];
@@ -226,8 +274,17 @@ int main(void){
     while (!WindowShouldClose()){
         float dt = (float)GetFrameTime();
         calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, hitbox_radius, dt, hight);
-        calculate_next_ship_coordinates(&ship, ship_radius, dt, hight);
         calculate_next_bullet_coordinates(bullets, number_of_bullets, bullet_radius, dt, hight);
+        calculate_next_ship_coordinates(&ship, ship_radius, dt, hight);
+
+        check_asteroids_and_bullets_collisions(
+            bullets, 
+            asteroids, 
+            number_of_bullets, 
+            number_of_asteroids, 
+            bullet_radius, 
+            hitbox_radius
+        );
 
         if (IsKeyDown(KEY_UP)){
             change_speed(&ship.velocity, ship.angle, acceleration, dt);
@@ -238,8 +295,6 @@ int main(void){
             current_bullet_index = (current_bullet_index + 1) % number_of_bullets; 
         }
 
-        apply_friction(&ship.velocity, friction, dt);
-
         if (IsKeyDown(KEY_LEFT)){
             ship.angle -= angle_change * dt;
         }
@@ -247,6 +302,8 @@ int main(void){
             ship.angle += angle_change * dt;
         }
 
+        apply_friction(&ship.velocity, friction, dt);
+        
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
