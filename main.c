@@ -144,7 +144,7 @@ void calculate_next_bullet_coordinates(Bullet bullets[], int length, int radius,
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
         if (asteroids[i].alive){
-            DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, GRAY);
+            DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, WHITE);
         }
     }
 }
@@ -158,7 +158,19 @@ void draw_ship(Ship ship, int radius){
         .y=ship.position.y + direction.y * radius
     };
 
+    Vec2 left_wing_position = {
+        .x=ship.position.x - direction.x * radius,
+        .y=ship.position.y - direction.y * radius
+    };
+    // Vec2 right_wing_position = {
+    //     .x=ship.position.x + direction.x * radius,
+    //     .y=ship.position.y + direction.y * radius
+    // };
+
     DrawLine(ship.position.x, ship.position.y, nose_position.x, nose_position.y, BLACK);
+
+    DrawLine(nose_position.x, nose_position.y, left_wing_position.x, left_wing_position.y, WHITE);
+    // DrawLine(nose_position.x, nose_position.y, right_wing_position.x, right_wing_position.y, WHITE);
 }
 
 void draw_bullets(Bullet bullets[], int number, int bullet_radius){
@@ -221,6 +233,7 @@ void check_asteroids_and_bullets_collisions(
 
             if (collision){
                 bullets[bullet_index].alive = false;
+                bullets[bullet_index].distance_traveled = 0.0f;
                 asteroids[asteroid_index].alive = false;
             }
         }
@@ -304,7 +317,7 @@ int main(void){
         
         BeginDrawing();
 
-            ClearBackground(RAYWHITE);
+            ClearBackground(BLACK);
             draw_asteroids(asteroids, number_of_asteroids, hitbox_radius);
             draw_ship(ship, ship_radius);
             draw_bullets(bullets, number_of_bullets, bullet_radius);
