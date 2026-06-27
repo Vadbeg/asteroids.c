@@ -149,8 +149,8 @@ void draw_asteroids(Asteroid asteroids[], int number, int radius){
     }
 }
 
-void draw_ship(Ship ship, int radius){
-    DrawCircle(ship.position.x, ship.position.y, radius, GREEN);
+void draw_ship(Ship ship, int radius, bool engine_on){
+    // DrawCircle(ship.position.x, ship.position.y, radius, GREEN);
     
     Vec2 direction = get_direction(ship.angle);
     Vec2 nose_position = {
@@ -158,19 +158,55 @@ void draw_ship(Ship ship, int radius){
         .y=ship.position.y + direction.y * radius
     };
 
+    Vec2 left_wing_direction = get_direction(ship.angle - 140);
     Vec2 left_wing_position = {
-        .x=ship.position.x - direction.x * radius,
-        .y=ship.position.y - direction.y * radius
+        .x=ship.position.x + left_wing_direction.x * radius * 1.4,
+        .y=ship.position.y + left_wing_direction.y * radius * 1.4
     };
-    // Vec2 right_wing_position = {
-    //     .x=ship.position.x + direction.x * radius,
-    //     .y=ship.position.y + direction.y * radius
-    // };
+    Vec2 left_engine_position = {
+        .x=ship.position.x + left_wing_direction.x * radius,
+        .y=ship.position.y + left_wing_direction.y * radius
+    };
 
+    Vec2 right_wing_direction = get_direction(ship.angle + 140);
+    Vec2 right_wing_position = {
+        .x=ship.position.x + right_wing_direction.x * radius * 1.4,
+        .y=ship.position.y + right_wing_direction.y * radius * 1.4
+    };
+    Vec2 right_engine_position = {
+        .x=ship.position.x + right_wing_direction.x * radius,
+        .y=ship.position.y + right_wing_direction.y * radius
+    };
+    
     DrawLine(ship.position.x, ship.position.y, nose_position.x, nose_position.y, BLACK);
 
     DrawLine(nose_position.x, nose_position.y, left_wing_position.x, left_wing_position.y, WHITE);
-    // DrawLine(nose_position.x, nose_position.y, right_wing_position.x, right_wing_position.y, WHITE);
+    DrawLine(nose_position.x, nose_position.y, right_wing_position.x, right_wing_position.y, WHITE);
+    DrawLine(left_engine_position.x, left_engine_position.y, right_engine_position.x, right_engine_position.y, WHITE);
+
+    if (engine_on){
+        // no need for absolute values here, we handle rotation with sign
+        float engine_delta_x = right_engine_position.x - left_engine_position.x; 
+        float engine_delta_y = right_engine_position.y - left_engine_position.y;
+        
+        Vec2 left_exhoust_position = {
+            .x = left_engine_position.x + engine_delta_x * 0.3,
+            .y = left_engine_position.y + engine_delta_y * 0.3
+        };
+        Vec2 right_exhoust_position = {
+            .x = right_engine_position.x - engine_delta_x * 0.3,
+            .y = right_engine_position.y - engine_delta_y * 0.3
+        };
+    
+        Vec2 exhoust_direction = get_direction(ship.angle - 180);
+        Vec2 top_exhoust_position = {
+            .x=ship.position.x + exhoust_direction.x * radius * 1.4,
+            .y=ship.position.y + exhoust_direction.y * radius * 1.4
+        };
+
+        DrawLine(left_exhoust_position.x, left_exhoust_position.y, top_exhoust_position.x, top_exhoust_position.y, WHITE);
+        DrawLine(right_exhoust_position.x, right_exhoust_position.y, top_exhoust_position.x, top_exhoust_position.y, WHITE);
+    }
 }
 
 void draw_bullets(Bullet bullets[], int number, int bullet_radius){
@@ -282,6 +318,8 @@ int main(void){
     Bullet bullets[number_of_bullets];
     initialize_bullets(bullets, number_of_bullets);
 
+    bool engine_on = false;
+
     while (!WindowShouldClose()){
         float dt = (float)GetFrameTime();
         calculate_next_asteroids_coordinates(asteroids, number_of_asteroids, hitbox_radius, dt, hight);
@@ -299,6 +337,9 @@ int main(void){
 
         if (IsKeyDown(KEY_UP)){
             change_speed(&ship.velocity, ship.angle, acceleration, dt);
+            engine_on = true;
+        } else {
+            engine_on = false;
         }
 
         if (IsKeyPressed(KEY_SPACE)){
@@ -319,7 +360,7 @@ int main(void){
 
             ClearBackground(BLACK);
             draw_asteroids(asteroids, number_of_asteroids, hitbox_radius);
-            draw_ship(ship, ship_radius);
+            draw_ship(ship, ship_radius, engine_on);
             draw_bullets(bullets, number_of_bullets, bullet_radius);
 
         EndDrawing();
