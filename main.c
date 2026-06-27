@@ -33,6 +33,21 @@ typedef struct Bullet{
 } Bullet;
 
 
+static const Vec2 rock1[] = {
+    (Vec2){.x=0, .y=16},
+    (Vec2){.x=16, .y=16},
+    (Vec2){.x=16, .y=-16},
+    (Vec2){.x=-8, .y=-16},
+    (Vec2){.x=8, .y=-16},
+    (Vec2){.x=-24, .y=-16},
+    (Vec2){.x=-24, .y=0},
+    (Vec2){.x=-16, .y=-16},
+    (Vec2){.x=0, .y=32},
+    (Vec2){.x=16, .y=16},
+    (Vec2){.x=16, .y=-16}
+};
+static const int rock1_length = 11;
+
 float random_float(float low, float high){
     float unit = (float) arc4random() / (float) UINT32_MAX;
     return low + (high - low) * unit;
@@ -144,7 +159,20 @@ void calculate_next_bullet_coordinates(Bullet bullets[], int length, int radius,
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
         if (asteroids[i].alive){
-            DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, WHITE);
+            for (int vertex_idx = 1; vertex_idx < rock1_length; vertex_idx++){
+                Vec2 point1 = {
+                    .x=rock1[vertex_idx - 1].x + asteroids[i].position.x,
+                    .y=rock1[vertex_idx - 1].y + asteroids[i].position.y
+                };
+                Vec2 point2 = {
+                    .x=rock1[vertex_idx].x + asteroids[i].position.x,
+                    .y=rock1[vertex_idx].y + asteroids[i].position.y
+                };
+
+                DrawLine(point1.x, point1.y, point2.x, point2.y, WHITE);
+            }
+
+            // DrawCircle(asteroids[i].position.x, asteroids[i].position.y, radius, WHITE);
         }
     }
 }
@@ -178,8 +206,6 @@ void draw_ship(Ship ship, int radius, bool engine_on){
         .y=ship.position.y + right_wing_direction.y * radius
     };
     
-    DrawLine(ship.position.x, ship.position.y, nose_position.x, nose_position.y, BLACK);
-
     DrawLine(nose_position.x, nose_position.y, left_wing_position.x, left_wing_position.y, WHITE);
     DrawLine(nose_position.x, nose_position.y, right_wing_position.x, right_wing_position.y, WHITE);
     DrawLine(left_engine_position.x, left_engine_position.y, right_engine_position.x, right_engine_position.y, WHITE);
@@ -279,7 +305,7 @@ void check_asteroids_and_bullets_collisions(
 
 int main(void){
     int low = 0;
-    int hight = 900;
+    int hight = 500;
     int number_of_asteroids = 5;
     int number_of_bullets = 8;
     int bullet_speed_multiplier = 300;
@@ -287,7 +313,7 @@ int main(void){
     int current_bullet_index = 0;
 
     int hitbox_radius = 30;
-    int ship_radius = 10;
+    int ship_radius = 20;
     int bullet_radius = 3;
 
     float acceleration = 100.0f;
@@ -295,8 +321,8 @@ int main(void){
     float angle_change = 200.0f;
 
     Vec2 start_ship_position = {
-        .x=450,
-        .y=450
+        .x=250,
+        .y=250
     };
     Vec2 start_ship_velocity = {
         .x=0,
@@ -337,7 +363,7 @@ int main(void){
 
         if (IsKeyDown(KEY_UP)){
             change_speed(&ship.velocity, ship.angle, acceleration, dt);
-            engine_on = true;
+            engine_on = !engine_on;  // make flickering effect
         } else {
             engine_on = false;
         }
