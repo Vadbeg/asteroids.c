@@ -17,6 +17,7 @@ typedef struct Asteroid {
     Vec2 position;
     Vec2 velocity;
     bool alive;
+    float angle;
 } Asteroid;
 
 typedef struct Ship{
@@ -35,18 +36,18 @@ typedef struct Bullet{
 
 static const Vec2 rock1[] = {
     (Vec2){.x=0, .y=16},
-    (Vec2){.x=16, .y=16},
-    (Vec2){.x=16, .y=-16},
-    (Vec2){.x=-8, .y=-16},
-    (Vec2){.x=8, .y=-16},
-    (Vec2){.x=-24, .y=-16},
-    (Vec2){.x=-24, .y=0},
-    (Vec2){.x=-16, .y=-16},
-    (Vec2){.x=0, .y=32},
-    (Vec2){.x=16, .y=16},
-    (Vec2){.x=16, .y=-16}
+    (Vec2){.x=16, .y=32},
+    (Vec2){.x=32, .y=16},
+    (Vec2){.x=24, .y=0},
+    (Vec2){.x=32, .y=-16},
+    (Vec2){.x=8, .y=-32},
+    (Vec2){.x=-16, .y=-32},
+    (Vec2){.x=-32, .y=-16},
+    (Vec2){.x=-32, .y=16},
+    (Vec2){.x=-16, .y=32},
+    (Vec2){.x=0, .y=16}
 };
-static const int rock1_length = 11;
+static const int rock1_length = sizeof(rock1) / sizeof(rock1[0]);
 
 float random_float(float low, float high){
     float unit = (float) arc4random() / (float) UINT32_MAX;
@@ -79,6 +80,7 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
             random_float(MIN_SPEED_BOUND, MAX_SPEED_BOUND)
         };
         asteroids[i].alive = true;
+        asteroids[i].angle = random_float(0, 360);
     }
 }
 
@@ -156,18 +158,37 @@ void calculate_next_bullet_coordinates(Bullet bullets[], int length, int radius,
     }
 }
 
+void apply_rotation(Vec2 *point, float angle){
+    float angle_in_radians = angle * DEG2RAD;
+    
+    float new_x = point->x * cosf(angle_in_radians) - point->y * sinf(angle_in_radians);
+    float new_y = point->x * sinf(angle_in_radians) + point->y * cosf(angle_in_radians);
+
+    point->x = new_x;
+    point->y = new_y;
+}
+
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
         if (asteroids[i].alive){
             for (int vertex_idx = 1; vertex_idx < rock1_length; vertex_idx++){
                 Vec2 point1 = {
-                    .x=rock1[vertex_idx - 1].x + asteroids[i].position.x,
-                    .y=rock1[vertex_idx - 1].y + asteroids[i].position.y
+                    .x=rock1[vertex_idx - 1].x,
+                    .y=rock1[vertex_idx - 1].y
                 };
                 Vec2 point2 = {
-                    .x=rock1[vertex_idx].x + asteroids[i].position.x,
-                    .y=rock1[vertex_idx].y + asteroids[i].position.y
+                    .x=rock1[vertex_idx].x,
+                    .y=rock1[vertex_idx].y
                 };
+
+                apply_rotation(&point1, asteroids[i].angle);
+                apply_rotation(&point2, asteroids[i].angle);
+
+                point1.x += asteroids[i].position.x;
+                point1.y += asteroids[i].position.y;
+
+                point2.x += asteroids[i].position.x;
+                point2.y += asteroids[i].position.y;
 
                 DrawLine(point1.x, point1.y, point2.x, point2.y, WHITE);
             }
