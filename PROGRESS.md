@@ -31,6 +31,8 @@ Project: console Asteroids in C, as a vehicle for learning the language.
 - [x] **Vector thrust** — `KEY_UP` adds `direction × acceleration × dt` to velocity (add, not scale). Killed the old per-axis zero-clamp that forbade up/left motion.
 - [x] **Friction + natural terminal velocity** — exponential drag (`velocity *= friction`) applied every frame. Derived the fixed point `v* = a·dt/(1−d)` and why proportional drag self-caps; confirmed the hard speed `ceiling` is redundant and removed it.
 - [x] **Heading marker** — line from ship center to `center + direction × radius`, drawn with scalar `DrawLine` to dodge the `Vec2` vs raylib `Vector2` type-identity clash.
+- [x] **Vector-outline asteroids** — 4 original-game rock shapes as `static const Vec2 rockN[]` (absolute vertices, verified against the delta chains). Bugs worked through: deltas-stored-as-absolutes, the 2D rotation formula (cross terms + θ=0 identity test), and rotate-then-translate order. See NOTES "Encoding vector shapes", "Model → world transform", "2D rotation formula".
+- [x] **Shape lookup table** — `Shape { const Vec2 *rock; int size; }` + `static const Shape rock_shapes[]`; each `Asteroid` carries an `int shape` index set via `arc4random_uniform(4)`. `draw_asteroids` indexes the table instead of an if-chain. Covered: ragged-array problem, decay-forgets-length (one pointer spans all 4), FAM pitfall, value- vs pointer-constness, warnings≠errors. See NOTES.
 
 ## Known TODO / loose ends
 - `apply_friction` takes `dt` but **doesn't use it** — drag is still a raw per-frame `× 0.99`, so framerate-dependent. Fix: `friction^dt` (`powf`) or `e^(−k·dt)` (`expf`). Invisible at locked 60fps. See NOTES "Framerate-independent damping".

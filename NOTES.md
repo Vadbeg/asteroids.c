@@ -260,3 +260,54 @@ Topics covered, in order. Search this when something feels familiar.
 - `static` at file scope = module-private (linker can't see it).
 - Compile errors → missing include/typo. Linker errors → undefined symbol (missing `.o`) or duplicate symbol (function body in header / defined twice).
 - Build: `clang -c file.c -o file.o` per file, then link all `.o`s.
+
+## Encoding vector shapes (deltas vs absolutes, template/instance)
+- Original Asteroids rocks are **vector outlines** — ordered vertex lists, drawn as connected line segments. Source data often comes as **deltas** (`dx, dy` offsets between consecutive points) — that's a storage-compression trick, NOT positions.
+- `absolute[k] = absolute[k-1] + delta[k]`, starting `[0,0]`. Deltas are running differences; absolutes are the running sum. **Store absolutes** — they're draw-ready; deltas would force per-frame accumulation. (Bug hit: pasted the deltas into the vertex array as if absolute → garbage scatter near origin.)
+- **Template vs instance split.** The 4 rock outlines are *immutable shared geometry* → `static const` file-scope data, one canonical copy. Each `Asteroid` is an *instance* (position, velocity, angle, + which shape) and only **refers** to a template (by index or pointer). Never bake vertices into each entity.
+- Store geometry centered on the origin (**model space** — that's why vertices straddle negatives). Closing the loop: some rocks repeat the first vertex at the end, some have a `[0,0]` spur and close onto vertex 1 instead. Trust the stored last vertex; don't add an extra "wrap to index 0" segment, or you double-close.
+
+## Model → world transform (rotate-then-translate)
+- Standard engine pattern: geometry stored once at origin (model space), then per-instance **rotate, THEN translate** to place it in the world.
+- **Order is load-bearing.** Rotate the *raw* model vertex (spins around its own center), *then* add the instance position. Reverse it (translate first) and you rotate the already-displaced point around the screen origin → the whole shape *orbits* the corner instead of spinning in place.
+- This is a reusable primitive: `(point, angle, position) → world point`. Same thing `draw_ship` does by hand.
+
+## 2D rotation formula
+- Rotating `(x,y)` by θ: `x' = x·cosθ − y·sinθ` ; `y' = x·sinθ + y·cosθ`. **Both outputs mix both inputs** (cross terms) — that mixing *is* rotation, and `cos²+sin²=1` is why distance from origin is preserved.
+- Wrong: scaling each axis independently (`x'=x·cos, y'=y·sin`) — that's a squash/skew, not a rotation, and changes size.
+- The two lines are NOT the same trig pattern — `sin`/`cos` swap places and a sign flips. Tell-tale of a bug: both lines leading with `x·cos`.
+- **θ=0 sanity test:** a correct rotation is the identity at 0 (`x'=x, y'=y`). Any rotation that fails this is wrong.
+- Units: `cosf`/`sinf` always want **radians**; convert stored degrees with `* DEG2RAD`. (Same trap as ship heading.) Hoist `c=cosf`, `s=sinf` once per object — angle is constant for a whole shape; recomputing per vertex is wasted trig.
+
+## Lookup table vs if-chain (data over control flow)
+- Branching on an integer to select one of N things (`if (shape==1) rock1 ...`) is almost always a **table lookup in disguise**. Replace with an array indexed by the integer: `shapes[shape]`. The int stops being a "selector you switch on" and becomes a genuine **array index**.
+- Payoff: O(1), no branching, adding a case is a one-line table edit with zero changes to consumer code, and you can iterate/count/randomly pick by index.
+- `arc4random_uniform(N)` → bias-free `[0,N)`, which pushes you to **0-based** indices.
+
+## Ragged data + the Shape struct (pointer + count)
+- 2D array `T arr[N][M]` must be a rectangle — single fixed M. Shapes have **different vertex counts** → can't be one rectangular array.
+- Solution: a `Shape` struct bundling `const Vec2 *verts` + `int count`, and a table `static const Shape shapes[]` whose entries pair each `rockN[]` with its length. Length travels *with* the data (no parallel-array desync — same lesson as the positional-arg bug).
+- **Why one `const Vec2 *` field can point at all four different-length arrays:** the element type (`Vec2`) is identical; only length differs; and an array name **decays to `T *`, which forgets the length**. `const Vec2[12]` and `const Vec2[14]` are distinct *array* types, but both decay to the same `const Vec2 *`. Decay drops exactly the part that differed → that's why the separate `count` field is needed to carry it back.
+- A struct field **cannot** be `T verts[]` to mean "pointer." `T verts[]` inside a struct is a **flexible array member** (FAM): must be the *last* member, has no storage, is for the `malloc(sizeof(S)+n*elem)` trick — not assignable, wrong tool. You want a pointer.
+- The length-keeping pointer type `T (*)[N]` is the *wrong* tool here — it bakes `N` into the type so rock2 wouldn't fit. Want the length-forgetting `T *`.
+
+## Subscripting is a pointer operation
+- `E1[E2] ≡ *((E1)+(E2))`. Subscript is defined on **pointers**, not arrays. `p[2]` works on any `int *` — it's `*(p+2)`. (`arr[i]` on a real array decays the array to a pointer *first*, then subscripts — array indexing IS pointer indexing under the hood.)
+- Compiler allows `p[2]` on any pointer with zero bounds checks; **validity is on you** — only correct if `p` points into ≥3 elements. `shapes[i].verts[k]` subscripts a `const Vec2 *` exactly like an array though no array type is involved.
+
+## const: value-constness vs pointer-constness (two different dials)
+- **A value's constness comes from the storage it lives in. A pointer's constness is a promise about the storage it points to.** Two independent dials.
+- In a `static const Shape shapes[]`: the table's `const` already makes every element's fields read-only *through that access* (`shapes[0].size = 9` is rejected). So a by-value field like `int size` needs **no** `const` of its own — and marking it `const int` would be harmful (a struct with a const member becomes non-assignable as a whole).
+- But a **pointer field** `const Vec2 *rock` needs its `const` because that const describes the **pointee** (the read-only `rockN[]` it points at), not the field. `Vec2 *` (writable) pointing at `const Vec2[]` is a type **lie** the compiler catches: *"discards qualifiers."* Three different `const`s did three different jobs (table storage / value copy / pointee promise).
+- Why it matters even if you only read: a `Vec2 *` to `static const` data means a stray write `rock[0].x = 5` compiles **clean** (type says writable) but is **UB** — static-const often lives in a read-only page → segfault. The const-discard warning slams that door before the bug exists.
+
+## Warnings are not errors (but treat them like errors)
+- Discarding `const` (and many type mismatches) is a **constraint violation**: the standard only requires a *diagnostic*, not a hard stop. clang emits a **warning** and still produces a working binary — "compiles and runs" ≠ "correct."
+- `-Werror` promotes warnings to errors so these can't slip through. A clean build *with warnings* is a build that found bugs you chose to ignore.
+
+## const variable is not a constant expression (recap, bit us)
+- Using a `static const int len` as an initializer for another **static-storage** object (`static const Shape t[] = { {.size = len} }`) is, per strict C, *not a constant expression* → "initializer element is not constant." Same rule as `const int N; int a[N];` → VLA.
+- clang **accepted** it here (constant-folds the `sizeof`-derived value) — a compiler courtesy, not guaranteed. Standards-clean alternatives: inline `sizeof(arr)/sizeof(arr[0])` directly, or use `enum`/`#define` for the lengths.
+
+## Internal libc headers
+- Never `#include <_stdlib.h>` etc. — underscore-prefixed headers are **private libc implementation details**, not a stable API; pulling them in directly can break on other toolchains. Include the public `<stdlib.h>`; it pulls the internal ones in for you. (Got auto-inserted by editor autocomplete once.)
