@@ -1,3 +1,4 @@
+#include <_stdlib.h>
 #include <math.h>
 #include <raylib.h>
 #include <stdbool.h>
@@ -18,6 +19,7 @@ typedef struct Asteroid {
     Vec2 velocity;
     bool alive;
     float angle;
+    int shape;
 } Asteroid;
 
 typedef struct Ship{
@@ -32,6 +34,11 @@ typedef struct Bullet{
     bool alive;
     float distance_traveled;
 } Bullet;
+
+typedef struct Shape{
+    const Vec2 *rock;
+    int size;
+} Shape;
 
 
 static const Vec2 rock1[] = {
@@ -100,6 +107,14 @@ static const Vec2 rock4[] = {
 static const int rock4_length = sizeof(rock4) / sizeof(rock4[0]);
 
 
+static const Shape rock_shapes[] = {
+    (Shape){.rock=rock1, .size=rock1_length},
+    (Shape){.rock=rock2, .size=rock2_length},
+    (Shape){.rock=rock3, .size=rock3_length},
+    (Shape){.rock=rock4, .size=rock4_length},
+};
+
+
 float random_float(float low, float high){
     float unit = (float) arc4random() / (float) UINT32_MAX;
     return low + (high - low) * unit;
@@ -132,6 +147,7 @@ void initialize_asteroids(Asteroid asteroids[], int number, int low, int high){
         };
         asteroids[i].alive = true;
         asteroids[i].angle = random_float(0, 360);
+        asteroids[i].shape = arc4random_uniform(4);
     }
 }
 
@@ -222,14 +238,15 @@ void apply_rotation(Vec2 *point, float angle){
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
         if (asteroids[i].alive){
-            for (int vertex_idx = 1; vertex_idx < rock4_length; vertex_idx++){
+            Shape current_shape = rock_shapes[asteroids[i].shape];
+            for (int vertex_idx = 1; vertex_idx < current_shape.size; vertex_idx++){
                 Vec2 point1 = {
-                    .x=rock4[vertex_idx - 1].x,
-                    .y=rock4[vertex_idx - 1].y
+                    .x=current_shape.rock[vertex_idx - 1].x,
+                    .y=current_shape.rock[vertex_idx - 1].y
                 };
                 Vec2 point2 = {
-                    .x=rock4[vertex_idx].x,
-                    .y=rock4[vertex_idx].y
+                    .x=current_shape.rock[vertex_idx].x,
+                    .y=current_shape.rock[vertex_idx].y
                 };
 
                 apply_rotation(&point1, asteroids[i].angle);
