@@ -49,6 +49,57 @@ static const Vec2 rock1[] = {
 };
 static const int rock1_length = sizeof(rock1) / sizeof(rock1[0]);
 
+static const Vec2 rock2[] = {
+    (Vec2){.x=16, .y=8},
+    (Vec2){.x=32, .y=16},
+    (Vec2){.x=16, .y=32},
+    (Vec2){.x=0, .y=24},
+    (Vec2){.x=-16, .y=32},
+    (Vec2){.x=-32, .y=16},
+    (Vec2){.x=-24, .y=0},
+    (Vec2){.x=-32, .y=-16},
+    (Vec2){.x=-16, .y=-32},
+    (Vec2){.x=-8, .y=-24},
+    (Vec2){.x=16, .y=-32},
+    (Vec2){.x=32, .y=-8},
+    (Vec2){.x=16, .y=8}
+};
+static const int rock2_length = sizeof(rock2) / sizeof(rock2[0]);
+
+static const Vec2 rock3[] = {
+    (Vec2){.x=0, .y=0},
+    (Vec2){.x=-16, .y=-8},
+    (Vec2){.x=0, .y=-32},
+    (Vec2){.x=16, .y=-8},
+    (Vec2){.x=16, .y=-32},
+    (Vec2){.x=32, .y=-32},
+    (Vec2){.x=48, .y=-8},
+    (Vec2){.x=48, .y=8},
+    (Vec2){.x=32, .y=32},
+    (Vec2){.x=8, .y=32},
+    (Vec2){.x=-16, .y=8},
+    (Vec2){.x=0, .y=0},
+};
+static const int rock3_length = sizeof(rock3) / sizeof(rock3[0]);
+
+static const Vec2 rock4[] = {
+    (Vec2){.x=0, .y=0},
+    (Vec2){.x=24, .y=8},
+    (Vec2){.x=24, .y=16},
+    (Vec2){.x=0, .y=32},
+    (Vec2){.x=-24, .y=32},
+    (Vec2){.x=-16, .y=16},
+    (Vec2){.x=-40, .y=16},
+    (Vec2){.x=-40, .y=-8},
+    (Vec2){.x=-24, .y=-32},
+    (Vec2){.x=-0, .y=-24},
+    (Vec2){.x=8, .y=-32},
+    (Vec2){.x=24, .y=-16},
+    (Vec2){.x=0, .y=0}
+};
+static const int rock4_length = sizeof(rock4) / sizeof(rock4[0]);
+
+
 float random_float(float low, float high){
     float unit = (float) arc4random() / (float) UINT32_MAX;
     return low + (high - low) * unit;
@@ -171,14 +222,14 @@ void apply_rotation(Vec2 *point, float angle){
 void draw_asteroids(Asteroid asteroids[], int number, int radius){
     for (int i = 0; i < number; i++){
         if (asteroids[i].alive){
-            for (int vertex_idx = 1; vertex_idx < rock1_length; vertex_idx++){
+            for (int vertex_idx = 1; vertex_idx < rock4_length; vertex_idx++){
                 Vec2 point1 = {
-                    .x=rock1[vertex_idx - 1].x,
-                    .y=rock1[vertex_idx - 1].y
+                    .x=rock4[vertex_idx - 1].x,
+                    .y=rock4[vertex_idx - 1].y
                 };
                 Vec2 point2 = {
-                    .x=rock1[vertex_idx].x,
-                    .y=rock1[vertex_idx].y
+                    .x=rock4[vertex_idx].x,
+                    .y=rock4[vertex_idx].y
                 };
 
                 apply_rotation(&point1, asteroids[i].angle);
